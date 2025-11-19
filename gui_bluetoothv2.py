@@ -2,7 +2,7 @@ import tkinter as tk
 import serial
 
 # === SETTINGS ===
-COM_PORT = "COM7"   # HC-05 outgoing port
+COM_PORT = "COM5"   # HC-05 outgoing port
 BAUD_RATE = 9600
 
 # === CONNECT TO SERIAL ===
@@ -48,13 +48,13 @@ buttons["TR"] = make_button(frame_direction, "→", 1, 2)
 buttons["TL"] = make_button(frame_direction, "←", 1, 0)
 
 roller_title_lbl = tk.Label(master=frame_roller, text="Roller", font=("Arial", 10))
-roller_title_lbl.grid(row=0, column=0, sticky="ew")
+roller_title_lbl.grid(row=0, column=0, sticky="ew", columnspan=2)
 buttons["R"] = roller_title_lbl
 
 roller_status_lbl = tk.Label(master=frame_roller, text="Status")
 roller_status_lbl.grid(row=1, column=0)
 
-roller_on_lbl = tk.Label(master=frame_roller, text="OFF", borderwidth=1, relief=tk.SUNKEN, bg="lightcoral")
+roller_on_lbl = tk.Label(master=frame_roller, text="OFF", borderwidth=1, relief=tk.SUNKEN, bg="lightcoral", width=10)
 roller_on_lbl.grid(row=1, column=1)
 states["Roller_ON"] = False
 
