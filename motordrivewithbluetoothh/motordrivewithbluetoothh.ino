@@ -9,11 +9,24 @@ SoftwareSerial BT(10, 11); // RX, TX  (HC-05 TX → 10, RX → 11)
 const int enablePin = 9;  // Enable pin (PWM)
 const int in1Pin = 8;     // Direction pin 1
 const int in2Pin = 7;     // Direction pin 2
+const int roll_enablePin = 6; 
+const int roll_dir1Pin = 5;
+const int roll_dir2Pin = 4;
+const int hydration_enablePin = 3;
+const int hydration_dir1Pin = 2;
+const int hydration_dir2Pin = 12;
+
+// State variables
+bool rollerOn = false;
 
 void setup() {
   pinMode(enablePin, OUTPUT);
   pinMode(in1Pin, OUTPUT);
   pinMode(in2Pin, OUTPUT);
+
+  pinMode(roll_enablePin, OUTPUT);
+  pinMode(roll_dir1Pin, OUTPUT);
+  pinMode(roll_dir2Pin, OUTPUT);
 
   Serial.begin(9600); // USB debug
   BT.begin(9600);     // HC-05 default baud rate
@@ -45,15 +58,49 @@ void handleCommand(char cmd) {
     case 'F':
       forward(200);
       break;
-    case 'R':
+    case 'B':
       reverse(200);
       break;
     case 'S':
       stopMotor();
       break;
+    case 'R':
+      updateRollerState();
+      startRoller(200);
+      break;
     default:
       stopMotor();
       break;
+  }
+}
+
+void updateRollerState(){
+  if (rollerOn == true){
+    rollerOn = false;
+  }else{
+    rollerOn = true;
+  }
+}
+
+void startRoller(int speed){
+  if (rollerOn == true){
+    //if roller state is ON, turn on roller
+    digitalWrite(roll_dir1Pin, HIGH);
+    digitalWrite(roll_dir2Pin, LOW);
+    analogWrite(roll_enablePin, speed);
+    // turn on hydration pump
+    digitalWrite(hydration_dir1Pin, HIGH);
+    digitalWrite(hydration_dir2Pin, LOW);
+    analogWrite(hydration_enablePin, speed);
+  }else{
+    //disable roller
+    digitalWrite(roll_dir1Pin, LOW);
+    digitalWrite(roll_dir2Pin, LOW);
+    analogWrite(roll_enablePin, 0);
+    //disable hydration pump
+    digitalWrite(hydration_dir1Pin, LOW);
+    digitalWrite(hydration_dir2Pin, LOW);
+    analogWrite(hydration_enablePin, 0);
   }
 }
 
