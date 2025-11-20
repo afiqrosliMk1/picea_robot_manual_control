@@ -1,32 +1,45 @@
 #include <SoftwareSerial.h>
+/*Due to limited pins, shift register is used
+direction for motor signal is packaged in an 8bit payload
+For payload structure, refer document in repository*/
 
 // HC-05 Bluetooth module on pins 10 (RX) and 11 (TX)
 // RX must be a supported pin on Leonardo (10, 11, etc.)
 SoftwareSerial BT(10, 11); // RX, TX  (HC-05 TX → 10, RX → 11)
 
 
-// L293D Motor Driver pins
-const int enablePin = 9;  // Enable pin (PWM)
-const int in1Pin = 8;     // Direction pin 1
-const int in2Pin = 7;     // Direction pin 2
-const int roll_enablePin = 6; 
-const int roll_dir1Pin = 5;
-const int roll_dir2Pin = 4;
+// L293D Motor Driver enable pins (PWM)
+const int traction_left_enablePin = 9; 
+const int traction_right_enablePin = 6; 
+const int roll_enablePin = 5; 
 const int hydration_enablePin = 3;
-const int hydration_dir1Pin = 2;
-const int hydration_dir2Pin = 12;
+
+// 74HC595 Shift Register Pin
+const int dataPin = 2;
+const int latchPin = 4;
+const int clockPin = 7;
 
 // State variables
 bool rollerOn = false;
 
-void setup() {
-  pinMode(enablePin, OUTPUT);
-  pinMode(in1Pin, OUTPUT);
-  pinMode(in2Pin, OUTPUT);
+// payload
+uint8_t payload = 0b00000000;
 
+// bit mask for each motor
+#define TRACTION_LEFT_MASK  0b00000011
+#define TRACTION_RIGHT_MASK 0b00001100
+#define ROLLER_MASK         0b00110000
+#define HYDRATION_MASK      0b11000000
+
+void setup() {
+  pinMode(dataPin, OUTPUT);
+  pinMode(latchPin, OUTPUT);
+  pinMode(clockPin, OUTPUT);
+
+  pinMode(traction_left_enablePin, OUTPUT);
+  pinMode(traction_right_enablePin, OUTPUT);
   pinMode(roll_enablePin, OUTPUT);
-  pinMode(roll_dir1Pin, OUTPUT);
-  pinMode(roll_dir2Pin, OUTPUT);
+  pinMode(hydration_enablePin, OUTPUT);
 
   Serial.begin(9600); // USB debug
   BT.begin(9600);     // HC-05 default baud rate
@@ -42,6 +55,7 @@ void loop() {
     Serial.print("BT Received: ");
     Serial.println(cmd);
     handleCommand(cmd);
+    updateShiftRegister();
   }
 
   // (Optional) — also allow control via USB Serial
@@ -50,6 +64,11 @@ void loop() {
     Serial.print("USB Received: ");
     Serial.println(cmd);
     handleCommand(cmd);
+    updateShiftRegister();
+    for (int i = 7; i >= 0; i--) {
+    Serial.print(bitRead(payload, i));
+    }
+    Serial.println();
   }
 }
 
@@ -74,6 +93,14 @@ void handleCommand(char cmd) {
   }
 }
 
+void updateShiftRegister(){
+  //set latch pin low before shifting for smooth update
+  digitalWrite(latchPin, LOW);
+  shiftOut(dataPin, clockPin, MSBFIRST, payload);
+  //LOW->HIGH move payload from shift register to storage register
+  digitalWrite(latchPin, HIGH);
+}
+
 void updateRollerState(){
   if (rollerOn == true){
     rollerOn = false;
@@ -83,44 +110,80 @@ void updateRollerState(){
 }
 
 void startRoller(int speed){
+  //if roller state is ON, turn on roller
   if (rollerOn == true){
-    //if roller state is ON, turn on roller
-    digitalWrite(roll_dir1Pin, HIGH);
-    digitalWrite(roll_dir2Pin, LOW);
+    //isolate and clear the roller bits
+    payload &= ~ROLLER_MASK;
+
+    //roller rotate forward;
+    payload |= 0b00010000;
+
     analogWrite(roll_enablePin, speed);
+    
     // turn on hydration pump
-    digitalWrite(hydration_dir1Pin, HIGH);
-    digitalWrite(hydration_dir2Pin, LOW);
+    // isolate and clear hydration pump bits
+    payload &= ~HYDRATION_MASK;
+
+    // hydration pump rotate forward
+    payload |= 0b01000000;
+
     analogWrite(hydration_enablePin, speed);
   }else{
+    //isolate and clear the roller bits
+    payload &= ~ROLLER_MASK;
+
     //disable roller
-    digitalWrite(roll_dir1Pin, LOW);
-    digitalWrite(roll_dir2Pin, LOW);
+    payload |= 0b00000000;
     analogWrite(roll_enablePin, 0);
+
+    // isolate and clear hydration pump bits
+    payload &= ~HYDRATION_MASK;
+
     //disable hydration pump
-    digitalWrite(hydration_dir1Pin, LOW);
-    digitalWrite(hydration_dir2Pin, LOW);
+    payload |= 0b00000000;
     analogWrite(hydration_enablePin, 0);
   }
 }
 
 void forward(int speed) {
-  digitalWrite(in1Pin, HIGH);
-  digitalWrite(in2Pin, LOW);
-  analogWrite(enablePin, speed);
+  //isolate the traction motor bits and clear it while keeping other bits untouched
+  payload &= ~TRACTION_LEFT_MASK;
+  payload &= ~TRACTION_RIGHT_MASK;
+
+  //left traction motor move forward
+  payload |= 0b00000001;
+  //right traction motor move forward
+  payload |= 0b00000100;
+  analogWrite(traction_left_enablePin, speed);
+  analogWrite(traction_right_enablePin, speed);
   Serial.println("Motor forward");
 }
 
 void reverse(int speed) {
-  digitalWrite(in1Pin, LOW);
-  digitalWrite(in2Pin, HIGH);
-  analogWrite(enablePin, speed);
+  //isolate the traction motor bits and clear it while keeping other bits untouched
+  payload &= ~TRACTION_LEFT_MASK;
+  payload &= ~TRACTION_RIGHT_MASK;
+
+  //left traction motor move backward
+  payload |= 0b00000010;
+  //right traction motor move backward
+  payload |= 0b00001000;
+
+  analogWrite(traction_left_enablePin, speed);
+  analogWrite(traction_right_enablePin, speed);
   Serial.println("Motor reverse");
 }
 
 void stopMotor() {
-  digitalWrite(in1Pin, LOW);
-  digitalWrite(in2Pin, LOW);
-  analogWrite(enablePin, 0);
+  //clear bits for left and right traction motor while leaving others bits untouched
+  payload &= ~TRACTION_LEFT_MASK;
+  payload &= ~TRACTION_RIGHT_MASK;
+  //stop left traction motor
+  payload |= 0b00000000;
+  //stop right traction motor
+  payload |= 0b00000000;
+  
+  analogWrite(traction_left_enablePin, 0);
+  analogWrite(traction_right_enablePin, 0);
   Serial.println("Motor stopped");
 }
