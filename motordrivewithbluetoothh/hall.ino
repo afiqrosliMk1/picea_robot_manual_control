@@ -19,9 +19,10 @@ const int pwmPin = 9;           // must be a PWM pin on Arduino
 // -----------------------------
 float setpoint = 300;           // target RPM
 
-float Kp = 1.2;
-float Ki = 0.8;
-float Kd = 0.05;
+//if output unit changed, gain must be retuned
+float Kp = 1.2; //unit [PWM/rpm]
+float Ki = 0.8; // PWM/(rpm.s)
+float Kd = 0.05; // PWM.s/rpm
 
 float integral = 0;
 float lastError = 0;
@@ -66,17 +67,24 @@ void loop() {
     float error = setpoint - rpm;
 
     // PID terms
+    // speeds up the motor proportionally if the error is large
     float P = Kp * error;
 
-    integral += error * 0.02;           // dt = 20 ms
+    integral += error * 0.02;  // dt = 20 ms
+    // I add more effort if error persists
     float I = Ki * integral;
 
     float derivative = (error - lastError) / 0.02;
+    // D is a brake that reduces overshoot 
     float D = Kd * derivative;
 
     float output = P + I + D;
 
     // Clamp output to valid PWM (0–255 on Arduino)
+    //why not map()? map will scale down the actual required effort,
+    //actuator won't give you full effort. Eg: if controller ask for 425PWM, 
+    //and we map it to fit into 0-255, we'll get 128PWM. 
+    //It is better to ask for full 255 PWM (closer to requested 425!)
     output = constrain(output, 0, 255);
 
     analogWrite(pwmPin, output);
